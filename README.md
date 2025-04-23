@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Time2Try
+
+Time2Try is a web application that suggests personalized project ideas based on your skills and available time. It uses AI to generate unique project suggestions that match your expertise and time constraints.
+
+## Features
+
+- 🎯 Personalized project suggestions based on skills and time
+- 🎨 Modern, responsive UI
+- 💾 Save your favorite project ideas
+- 📤 Export project ideas as PDF
+- 🔄 Regenerate suggestions with different parameters
+
+## Tech Stack
+
+### Frontend
+- Next.js
+- JavaScript
+- CSS Modules
+
+### Backend
+- Express.js
+- OpenRouter API (AI suggestions)
+- Firebase (authentication and data storage)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js (v14 or higher)
+- npm or yarn
+- OpenRouter API key
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/yourusername/time2try.git
+cd time2try
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install frontend dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+3. Install backend dependencies:
+```bash
+cd time2try-backend
+npm install
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Create a `.env` file in the backend directory:
+```env
+PORT=5000
+OPENROUTER_API_KEY=your_openrouter_api_key
+FRONTEND_URL=http://localhost:3000
+```
 
-## Learn More
+5. Start the backend server:
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+6. In a new terminal, start the frontend development server:
+```bash
+cd time2try
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+7. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Environment Variables
 
-## Deploy on Vercel
+### Frontend (.env.local)
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Backend (.env)
+```env
+PORT=5000
+OPENROUTER_API_KEY=your_openrouter_api_key
+FRONTEND_URL=http://localhost:3000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- OpenRouter API for AI-powered suggestions
+- Next.js team for the amazing framework
+- All contributors who help improve this project
