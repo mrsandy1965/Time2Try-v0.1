@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
+import projectIdeas from '../../data/projectIdeas.json';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:50001';
 const INITIAL_PROJECTS_PER_PAGE = 6;
-const INITIAL_TOTAL_PROJECTS = 30;
+const DEFAULT_TOTAL_PROJECTS = 15;
 const ADDITIONAL_PROJECTS = 5;
 const MAX_PROJECTS_PER_PAGE = 50;
+const PROJECTS_EXPIRY_HOURS = 24; // Projects will refresh after 24 hours
 
 export default function Suggestions() {
   const router = useRouter();
@@ -22,16 +23,87 @@ export default function Suggestions() {
   const [savedProjects, setSavedProjects] = useState([]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [toast, setToast] = useState({ show: false, message: '' });
+  const [techStackPreferences, setTechStackPreferences] = useState([]);
+  const [previouslyShownProjects, setPreviouslyShownProjects] = useState([]);
 
   useEffect(() => {
-    const storedSavedProjects = localStorage.getItem('savedProjects');
-    
-    if (storedSavedProjects) {
-      setSavedProjects(JSON.parse(storedSavedProjects));
-    }
-    
-    handleRegenerate(); // Always generate fresh ideas on page load
-    setLoading(false);
+    const initializePage = async () => {
+      try {
+        // Load saved projects and preferences from localStorage
+        const storedSavedProjects = localStorage.getItem('savedProjects');
+        const storedPreferences = localStorage.getItem('selectedTechStack');
+        const storedPreviouslyShown = localStorage.getItem('previouslyShownProjects');
+        
+        if (storedSavedProjects) {
+          setSavedProjects(JSON.parse(storedSavedProjects));
+        }
+        
+        let preferences = [];
+        if (storedPreferences) {
+          try {
+            preferences = JSON.parse(storedPreferences);
+            if (!preferences || preferences.length === 0) {
+              console.log('No valid tech stack preferences found');
+              router.push('/select');
+              return;
+            }
+          } catch (error) {
+            console.error('Error parsing tech stack preferences:', error);
+            router.push('/select');
+            return;
+          }
+        } else {
+          console.log('No tech stack preferences found');
+          router.push('/select');
+          return;
+        }
+
+        setTechStackPreferences(preferences);
+        console.log('Loaded tech stack preferences:', preferences);
+        
+        if (storedPreviouslyShown) {
+          try {
+            setPreviouslyShownProjects(JSON.parse(storedPreviouslyShown));
+          } catch (error) {
+            console.error('Error parsing previously shown projects:', error);
+            setPreviouslyShownProjects([]);
+          }
+        }
+        
+        // Load current projects from localStorage
+        const storedProjects = localStorage.getItem('currentProjects');
+        const storedProjectsTimestamp = localStorage.getItem('currentProjectsTimestamp');
+        
+        if (storedProjects && storedProjectsTimestamp) {
+          try {
+            const timestamp = parseInt(storedProjectsTimestamp);
+            const now = new Date().getTime();
+            const hoursSinceLastLoad = (now - timestamp) / (1000 * 60 * 60);
+            
+            if (hoursSinceLastLoad < PROJECTS_EXPIRY_HOURS) {
+              const parsedProjects = JSON.parse(storedProjects);
+              setAllIdeas(parsedProjects);
+              setTotalPages(Math.ceil(parsedProjects.length / INITIAL_PROJECTS_PER_PAGE));
+              setTotalProjects(parsedProjects.length);
+              updateDisplayedIdeas(parsedProjects, 1);
+              setIsInitialLoad(false);
+              setLoading(false);
+              return;
+            }
+          } catch (error) {
+            console.error('Error parsing stored projects:', error);
+          }
+        }
+        
+        await handleRegenerate();
+        setLoading(false);
+      } catch (error) {
+        console.error('Error initializing page:', error);
+        setLoading(false);
+      }
+    };
+
+    initializePage();
   }, []);
 
   const updateDisplayedIdeas = (ideas, page) => {
@@ -46,12 +118,16 @@ export default function Suggestions() {
     setToast({ show: true, message });
     setTimeout(() => {
       setToast(prev => ({ ...prev, show: false }));
-      // Remove toast from DOM after animation
       setTimeout(() => setToast({ show: false, message: '' }), 300);
     }, 3000);
   };
 
   const handleSave = (idea) => {
+    if (savedProjects.some(p => p.title === idea.title)) {
+      showToast('Project already saved!');
+      return;
+    }
+
     const updatedSavedProjects = [...savedProjects, idea];
     setSavedProjects(updatedSavedProjects);
     localStorage.setItem('savedProjects', JSON.stringify(updatedSavedProjects));
@@ -59,7 +135,6 @@ export default function Suggestions() {
   };
 
   const handleExport = (idea) => {
-    // Create a markdown file with project details
     const markdown = `# ${idea.title}
 
 ## Description
@@ -67,8 +142,6 @@ ${idea.description}
 
 ## Tech Stack
 ${idea.stack.join(', ')}
-
-
 
 ## Getting Started
 1. Clone the repository
@@ -93,80 +166,115 @@ ${idea.stack.join(', ')}
     URL.revokeObjectURL(url);
   };
 
+  const shuffleArray = (array) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  const filterProjectsByTechStack = (projects) => {
+    if (!techStackPreferences || techStackPreferences.length === 0) {
+      console.log('No tech stack preferences to filter by');
+      return projects;
+    }
+    
+    console.log('Filtering projects with preferences:', techStackPreferences);
+    const filtered = projects.filter(project => {
+      const matches = project.stack.some(tech => 
+        techStackPreferences.some(pref => 
+          tech.toLowerCase().includes(pref.toLowerCase())
+        )
+      );
+      console.log(`Project ${project.title} matches:`, matches);
+      return matches;
+    });
+    
+    console.log('Filtered projects count:', filtered.length);
+    return filtered;
+  };
+
+  const getUniqueProjects = (projects) => {
+    const unique = projects.filter(project => 
+      !previouslyShownProjects.some(shown => shown.title === project.title)
+    );
+    console.log('Unique projects count:', unique.length);
+    return unique;
+  };
+
   const handleRegenerate = async () => {
     try {
       setLoading(true);
-      const storedData = localStorage.getItem('projectData');
-      if (!storedData) {
-        router.push('/select');
-        return;
+      
+      const projectsToGenerate = isInitialLoad ? DEFAULT_TOTAL_PROJECTS : ADDITIONAL_PROJECTS;
+      const allAvailableIdeas = projectIdeas.projects;
+      
+      if (!allAvailableIdeas || allAvailableIdeas.length === 0) {
+        throw new Error('No ideas were found');
       }
 
-      const { skills, time } = JSON.parse(storedData);
+      // Filter projects based on tech stack preferences
+      let filteredIdeas = filterProjectsByTechStack(allAvailableIdeas);
       
-      // Convert time range to a number (average of the range)
-      let timeValue;
-      if (time === '1-2') timeValue = 1.5;
-      else if (time === '3-5') timeValue = 4;
-      else if (time === '6-10') timeValue = 8;
-      else if (time === '11-15') timeValue = 13;
-      else {
-        throw new Error('Invalid time value');
-      }
+      // Get unique projects that haven't been shown before
+      filteredIdeas = getUniqueProjects(filteredIdeas);
       
-      const projectsToGenerate = isInitialLoad ? INITIAL_TOTAL_PROJECTS : ADDITIONAL_PROJECTS;
-      
-      const response = await fetch(`${API_URL}/api/generate-ideas`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          skills,
-          time: timeValue,
-          page: 1,
-          projectsPerPage: projectsToGenerate
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate ideas');
+      if (filteredIdeas.length === 0) {
+        showToast('No more unique ideas available for your tech stack preferences!');
+        // Clear previously shown projects to start fresh
+        setPreviouslyShownProjects([]);
+        localStorage.removeItem('previouslyShownProjects');
+        filteredIdeas = filterProjectsByTechStack(allAvailableIdeas);
       }
 
-      const data = await response.json();
-      
-      if (!data.projects || data.projects.length === 0) {
-        throw new Error('No ideas were generated');
-      }
+      // Shuffle the filtered array
+      const shuffledIdeas = shuffleArray(filteredIdeas);
       
       if (isInitialLoad) {
-        setAllIdeas(data.projects);
-        setTotalPages(Math.ceil(data.projects.length / INITIAL_PROJECTS_PER_PAGE));
-        setTotalProjects(data.projects.length);
-        updateDisplayedIdeas(data.projects, 1);
+        const initialIdeas = shuffledIdeas.slice(0, projectsToGenerate);
+        setAllIdeas(initialIdeas);
+        setTotalPages(Math.ceil(initialIdeas.length / INITIAL_PROJECTS_PER_PAGE));
+        setTotalProjects(initialIdeas.length);
+        updateDisplayedIdeas(initialIdeas, 1);
         setIsInitialLoad(false);
+
+        // Store the initial projects and update previously shown projects
+        localStorage.setItem('currentProjects', JSON.stringify(initialIdeas));
+        localStorage.setItem('currentProjectsTimestamp', new Date().getTime().toString());
+        const updatedPreviouslyShown = [...previouslyShownProjects, ...initialIdeas];
+        setPreviouslyShownProjects(updatedPreviouslyShown);
+        localStorage.setItem('previouslyShownProjects', JSON.stringify(updatedPreviouslyShown));
       } else {
-        const newIdeas = [...allIdeas, ...data.projects];
-        const newTotalProjects = newIdeas.length;
+        const newIdeas = shuffledIdeas.slice(0, projectsToGenerate);
+        
+        if (newIdeas.length === 0) {
+          showToast('No more unique ideas available!');
+          return;
+        }
+
+        const combinedIdeas = [...allIdeas, ...newIdeas];
+        const newTotalProjects = combinedIdeas.length;
         const newTotalPages = Math.ceil(newTotalProjects / INITIAL_PROJECTS_PER_PAGE);
         
-        setAllIdeas(newIdeas);
+        setAllIdeas(combinedIdeas);
         setTotalPages(newTotalPages);
         setTotalProjects(newTotalProjects);
-        updateDisplayedIdeas(newIdeas, currentPage);
+        updateDisplayedIdeas(combinedIdeas, currentPage);
+
+        // Update stored projects and previously shown projects
+        localStorage.setItem('currentProjects', JSON.stringify(combinedIdeas));
+        localStorage.setItem('currentProjectsTimestamp', new Date().getTime().toString());
+        const updatedPreviouslyShown = [...previouslyShownProjects, ...newIdeas];
+        setPreviouslyShownProjects(updatedPreviouslyShown);
+        localStorage.setItem('previouslyShownProjects', JSON.stringify(updatedPreviouslyShown));
       }
 
-      localStorage.setItem('projectIdeas', JSON.stringify({
-        projects: isInitialLoad ? data.projects : [...allIdeas, ...data.projects],
-        totalPages: isInitialLoad ? Math.ceil(data.projects.length / INITIAL_PROJECTS_PER_PAGE) : Math.ceil((allIdeas.length + data.projects.length) / INITIAL_PROJECTS_PER_PAGE),
-        totalProjects: isInitialLoad ? data.projects.length : allIdeas.length + data.projects.length
-      }));
-
-      showToast(isInitialLoad ? 'Initial ideas generated successfully! 🎉' : 'More ideas generated successfully! 🎉');
+      showToast(isInitialLoad ? 'Initial ideas loaded successfully! 🎉' : 'More ideas loaded successfully! 🎉');
     } catch (error) {
-      console.error('Error generating ideas:', error);
-      showToast(error.message || 'Failed to generate ideas. Please try again.');
+      console.error('Error loading ideas:', error);
+      showToast(error.message || 'Failed to load ideas. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -185,7 +293,7 @@ ${idea.stack.join(', ')}
 
   if (loading) {
     return (
-      <main className={styles.main}>
+      <main className={styles.main} >
         <div className={styles.loading}>Loading ideas...</div>
       </main>
     );
@@ -310,11 +418,11 @@ ${idea.stack.join(', ')}
             className={styles.regenerateButton}
             onClick={handleRegenerate}
             disabled={loading}
-            title={isInitialLoad ? "Click to generate initial ideas" : "Generate more ideas"}
+            title={isInitialLoad ? "Click to load initial ideas" : "Load more ideas"}
           >
             {loading ? 'Loading...' : isInitialLoad ? 
-              'Generate Initial Ideas' : 
-              'Generate More Ideas'}
+              'Load Initial Ideas' : 
+              'Load More Ideas'}
           </button>
         </div>
 

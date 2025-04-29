@@ -52,8 +52,8 @@ export default function Select() {
       setError('Please add at least one skill');
       return;
     }
-    localStorage.setItem('projectData', JSON.stringify(formData));
-    router.push('/suggestions');
+    localStorage.setItem('selectedTechStack', JSON.stringify(formData.skills));
+    router.push('/select/suggestions');
   };
 
   // Close suggestions when clicking outside
